@@ -33,7 +33,7 @@
 %% gen_statem callbacks
 -export([
          init/1,
-         format_status/2,
+%%         format_status/2,
          handle_event/4,
          terminate/3,
          code_change/4,
@@ -258,10 +258,10 @@ multi_statem_call([ServerId | ServerIds], Msg, Errs, Timeout) ->
 %%% gen_statem callbacks
 %%%===================================================================
 
-init(#{reply_to := ReplyTo} = Config) ->
+init(#{reply_to := _ReplyTo} = Config) ->
     %% we have a reply to key, perform init async
-    {ok, post_init, maps:remove(reply_to, Config),
-     [{next_event, internal, {go, ReplyTo}}]};
+    {ok, post_init, #state{},
+     [{next_event, internal, {go, Config}}]};
 init(Config) ->
     %% no reply_to key, must have been started by an older node run synchronous
     %% init
@@ -332,7 +332,8 @@ callback_mode() -> [state_functions, state_enter].
 
 post_init(enter, _OldState, State) ->
     {keep_state, State, []};
-post_init(internal, {go, {ReplyToRef, ReplyToPid}}, Config) ->
+post_init(internal, {go, #{reply_to := {ReplyToRef, ReplyToPid}} = Config0}, _State) ->
+    Config = maps:remove(reply_to, Config0),
     State = do_init(Config),
     ReplyToPid ! {ReplyToRef, ok},
     {next_state, recover, State, [{next_event, internal, go}]}.
@@ -940,7 +941,7 @@ await_condition(EventType, Msg, State0) ->
 handle_event(_EventType, EventContent, StateName, State) ->
     ?WARN("~s: handle_event unknown ~P", [log_id(State), EventContent, 10]),
     {next_state, StateName, State}.
-
+%%(ra 2.4.9) /app/deps/ra/src/ra_server_proc.erl:945: :ra_server_proc.terminate(:function_clause, :post_init, {:state, :undefined, :undefined, %{}, [], :undefined, :undefined, {[], []}, false, %{}})
 terminate(Reason, StateName,
           #state{conf = #conf{name = Key, cluster_name = ClusterName},
                  server_state = ServerState = #{cfg := #cfg{metrics_key = MetricsKey}}} = State) ->
@@ -981,31 +982,13 @@ terminate(Reason, StateName,
     end,
     _ = ets:delete(ra_metrics, MetricsKey),
     _ = ets:delete(ra_state, Key),
-    ok.
+    ok;
+terminate(Reason, StateName, State) ->
+  ?DEBUG("~p: terminating with ~p in state ~p", [StateName, Reason, State]),
+  ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
     {ok, StateName, State}.
-
-format_status(Opt, [_PDict, StateName,
-                    #state{server_state = NS,
-                           leader_last_seen = LastSeen,
-                           pending_commands = Pending,
-                           delayed_commands = Delayed,
-                           pending_notifys = PendingNots,
-                           election_timeout_set = ElectionSet
-                          }]) ->
-    NumPendingNots = maps:fold(fun (_, Corrs, Acc) -> Acc + length(Corrs) end,
-                               0, PendingNots),
-    [{id, ra_server:id(NS)},
-     {opt, Opt},
-     {raft_state, StateName},
-     {leader_last_seen, LastSeen},
-     {num_pending_commands, length(Pending)},
-     {num_delayed_commands, queue:len(Delayed)},
-     {num_pending_applied_notifications, NumPendingNots},
-     {election_timeout_set, ElectionSet},
-     {ra_server_state, ra_server:overview(NS)}
-    ].
 
 %%%===================================================================
 %%% Internal functions

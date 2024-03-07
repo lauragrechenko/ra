@@ -2138,18 +2138,34 @@ fetch_term(Idx, #{log := Log0} = State) ->
         {Term, Log} ->
             {Term, State#{log => Log}}
     end.
+%%** (FunctionClauseError) no function clause matching in :ra_server."-make_cluster/2-lists^foldl/2-0-"/3
+%%(ra 2.4.9) /app/deps/ra/src/ra_server.erl:2143: :ra_server."-make_cluster/2-lists^foldl/2-0-"(#Function<16.69388614/2 in :ra_server.make_cluster/2>,
+%% %{}, %{{:audit_storage, :"crypto-key-enclave@crypto-key-enclave-0.crypto-key-enclave.crypto-key-enclave-dev.svc.cluster.local"} => %{},
+%% {:audit_storage, :"crypto-key-enclave@crypto-key-enclave-1.crypto-key-enclave.crypto-key-enclave-dev.svc.cluster.local"} => %{},
+%% {:audit_storage, :"crypto-key-enclave@crypto-key-enclave-2.crypto-key-enclave.crypto-key-enclave-dev.svc.cluster.local"} => %{}})
+%%(ra 2.4.9) /app/deps/ra/src/ra_server.erl:2143: :ra_server.make_cluster/2
+%%-spec make_cluster(ra_server_id(), ra_cluster_snapshot() | [ra_server_id()]) ->
+%%  ra_cluster().
+make_cluster(Self, Nodes0) when is_list(Nodes0) ->
+  Nodes = lists:foldl(fun(N, Acc) ->
+    Acc#{N => new_peer()}
+                      end, #{}, Nodes0),
+  append_self(Self, Nodes);
+make_cluster(Self, Nodes0) when is_map(Nodes0) ->
+  Nodes = maps:map(fun(_, Peer0) ->
+    new_peer_with(Peer0)
+                   end, Nodes0),
+  append_self(Self, Nodes).
 
-make_cluster(Self, Nodes) ->
-    case lists:foldl(fun(N, Acc) ->
-                             Acc#{N => new_peer()}
-                     end, #{}, Nodes) of
-        #{Self := _} = Cluster ->
-            % current server is already in cluster - do nothing
-            Cluster;
-        Cluster ->
-            % add current server to cluster
-            Cluster#{Self => new_peer()}
-    end.
+append_self(Self, Nodes) ->
+  case Nodes of
+    #{Self := _} = Cluster ->
+      % current server is already in cluster - do nothing
+      Cluster;
+    Cluster ->
+      % add current server to cluster
+      Cluster#{Self => new_peer()}
+  end.
 
 initialise_peers(State = #{log := Log, cluster := Cluster0}) ->
     PeerIds = peer_ids(State),
