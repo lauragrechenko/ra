@@ -141,7 +141,9 @@ handle_cast({mem_tables, Tables, WalFile}, State) ->
                      exit(segment_writer_segment_write_failure)
              end
          end || Tabs <- ra_lib:lists_chunk(Degree, Tables)],
+    Tables = WalFile,
     % delete wal file once done
+
     % TODO: test scenario when server crashes after segments but before
     % deleting walfile
     % can we make segment writer idempotent somehow
