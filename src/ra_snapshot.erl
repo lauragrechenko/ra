@@ -189,7 +189,8 @@ find_snapshots(#?MODULE{uid = UId,
     %% /snapshots/term_index/
     case pick_first_valid(UId, Module, SnapshotsDir, Snaps) of
         undefined ->
-            ok = delete_snapshots(SnapshotsDir, Snaps),
+            ?INFO("[LAURA] pick_first_valid: UNDEFINED"),
+            %% ok = delete_snapshots(SnapshotsDir, Snaps),
             %% initialise snapshots table even if no snapshots have been taken
             %% this ensure these is an entry when the WAL queries it
             true = ets:insert(?ETSTBL, {UId, -1}),
